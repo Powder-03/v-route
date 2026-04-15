@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"time"
 
 	"go_worker/internal/domain"
 
@@ -20,7 +21,7 @@ func NewConsumer(brokers []string, groupID, topic string) *Consumer {
 		GroupID: groupID,
 		Topic:   topic,
 		// Ensure we don't block indefinitely on reads if the context is canceled
-		ReadBackoffMin: 50 * json.Number("ms").String()[:0], // using 0 to bypass weird go static complains, actual backoff is handled internally
+		ReadBackoffMin: 50 * time.Millisecond,
 	})
 
 	return &Consumer{reader: reader}
