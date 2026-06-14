@@ -6,26 +6,26 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-WORKDIR /app
+# Create a non-root user
+RUN addgroup --system appgroup && adduser --system --group appuser
 
-# Install native dependencies required for sentence-transformers and aiokafka C Extensions
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
 # Install python dependencies mapped rigidly
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the sentence-transformers model during the docker build.
-# This ensures the container starts immediately on boot rather than pausing to download weights across the network.
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-
 # Copy the rest of the application code architecture
 COPY . .
+
+# Change ownership of the app directory to the non-root user
+RUN chown -R appuser:appgroup /app
+
+# Switch to the non-root user
+USER appuser
 
 # Explicitly expose port
 EXPOSE 8000
 
-# Start Uvicorn bound securely without localhost constraints
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start Gunicorn wrapped around Uvicorn bound securely without localhost constraints
+CMD ["gunicorn", "main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "4"]

@@ -3,6 +3,7 @@ services:
     image: nginx:latest
     ports:
       - "80:80"
+      # - "443:443" # Uncomment when SSL is configured
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
@@ -12,20 +13,33 @@ services:
 
   fastapi_worker_1:
     build: ./api_gateway
-    ports:
-      - "8001:8000"
+    # ports:
+    #   - "8001:8000" # Removed for production security
     environment:
       - REDIS_URL=redis://redis_cache:6379/0
       - KAFKA_BROKER=kafka_broker:9092
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     networks:
       - optiprompt-net
+    depends_on:
+      redis_cache:
+        condition: service_healthy
+      kafka_broker:
+        condition: service_healthy
 
   redis_cache:
     image: redis/redis-stack-server:latest 
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - optiprompt-net
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   kafka_broker:
     image: apache/kafka:latest
@@ -42,35 +56,55 @@ services:
       - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
-    ports:
-      - "9092:9092"
+    # ports:
+    #   - "9092:9092"
+    volumes:
+      - kafka_data:/tmp/kafka-logs
     networks:
       - optiprompt-net
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
 
   postgres_db:
     image: postgres:15
     environment:
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=secretpassword
-      - POSTGRES_DB=telemetry
-    ports:
-      - "5432:5432"
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secretpassword}
+      - POSTGRES_DB=${POSTGRES_DB:-telemetry}
+    # ports:
+    #   - "5433:5432"
     volumes:
+      - postgres_data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - optiprompt-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-telemetry}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   golang_worker:
     build: ./go_worker
     environment:
       - KAFKA_BROKER=kafka_broker:9092
-      - DB_URL=postgres://admin:secretpassword@postgres_db:5432/telemetry
+      - DB_URL=postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-secretpassword}@postgres_db:5432/${POSTGRES_DB:-telemetry}
     networks:
       - optiprompt-net
     depends_on:
-      - kafka_broker
-      - postgres_db
+      kafka_broker:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
 
 networks:
   optiprompt-net:
     driver: bridge
+
+volumes:
+  redis_data:
+  kafka_data:
+  postgres_data:

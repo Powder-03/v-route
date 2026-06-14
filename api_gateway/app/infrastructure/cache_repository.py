@@ -17,7 +17,7 @@ class CacheRepository:
         self.redis_url = redis_url
         self.client: Redis = None
         self.index_name = "prompts_idx"
-        self.vector_dim = 384 # Dimension size for all-MiniLM-L6-v2
+        self.vector_dim = 768 # Dimension size for text-embedding-004
 
     async def connect(self):
         self.client = await from_url(self.redis_url)
