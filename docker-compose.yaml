@@ -18,7 +18,11 @@ services:
     environment:
       - REDIS_URL=redis://redis_cache:6379/0
       - KAFKA_BROKER=kafka_broker:9092
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-gemini/text-embedding-004}
+      - LLM_MODEL=${LLM_MODEL:-gemini/gemini-1.5-flash}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     networks:
       - optiprompt-net
     depends_on:

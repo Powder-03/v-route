@@ -13,11 +13,11 @@ class CacheRepository:
     Handles Vector Search integration with Redis.
     Uses FT.SEARCH and the Cosine Distance metric.
     """
-    def __init__(self, redis_url: str):
+    def __init__(self, redis_url: str, vector_dim: int):
         self.redis_url = redis_url
         self.client: Redis = None
         self.index_name = "prompts_idx"
-        self.vector_dim = 768 # Dimension size for text-embedding-004
+        self.vector_dim = vector_dim
 
     async def connect(self):
         self.client = await from_url(self.redis_url)

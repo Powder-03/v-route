@@ -1,5 +1,7 @@
+import os
 import time
 import asyncio
+from litellm import acompletion
 from app.domain.models import PromptEntity, ResponseEntity, TelemetryData
 from app.infrastructure.vector_engine import VectorEngine
 from app.infrastructure.cache_repository import CacheRepository
@@ -19,35 +21,50 @@ class GenerateUseCase:
         self.vector_engine = vector_engine
         self.cache_repo = cache_repo
         self.event_broker = event_broker
+        self.llm_model = os.getenv("LLM_MODEL", "gemini/gemini-1.5-flash")
 
     async def execute(self, entity: PromptEntity) -> ResponseEntity:
         start_time = time.time()
         
-        # 1. Vectorize the prompt. Model.encode blocks CPU, so drop to async thread pool.
-        embedding = await asyncio.to_thread(self.vector_engine.encode, entity.prompt)
+        # 1. Vectorize the prompt.
+        embedding = await self.vector_engine.encode(entity.prompt)
         
         # 2. Perform Cosine Similarity search in Redis cache engine
         cached_response = await self.cache_repo.search_similar(embedding, threshold=0.95)
         
+        prompt_tokens = len(entity.prompt.split())
+        response_tokens = 0
+
         if cached_response:
             cache_hit = True
             response_text = cached_response
+            response_tokens = len(response_text.split())
         else:
             cache_hit = False
-            # 3. Dummy implementation for an LLM Generator
-            response_text = f"[LLM generated] Response to: {entity.prompt}"
+            # 3. Call LLM Generator via LiteLLM
+            response = await acompletion(
+                model=self.llm_model,
+                messages=[{"role": "user", "content": entity.prompt}]
+            )
+            response_text = response.choices[0].message.content or ""
+            
+            # Try to get token counts from LiteLLM usage info, falling back to split method
+            if hasattr(response, 'usage') and response.usage:
+                prompt_tokens = getattr(response.usage, 'prompt_tokens', prompt_tokens)
+                response_tokens = getattr(response.usage, 'completion_tokens', len(response_text.split()))
+            else:
+                response_tokens = len(response_text.split())
             
             # 4. Save newly generated entry seamlessly back into cache DB
             await self.cache_repo.save(entity.prompt, response_text, embedding)
 
         latency_ms = int((time.time() - start_time) * 1000)
 
-        # 5. Hydrate Telemetry Schema 
-        # (Using a mocked token count via spaces split strategy for demonstration)
+        # 5. Hydrate Telemetry Schema
         telemetry = TelemetryData(
             user_id=entity.user_id,
-            prompt_tokens=len(entity.prompt.split()),
-            response_tokens=len(response_text.split()),
+            prompt_tokens=prompt_tokens,
+            response_tokens=response_tokens,
             latency_ms=latency_ms,
             cache_hit=cache_hit
         )
