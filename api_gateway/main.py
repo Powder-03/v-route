@@ -21,10 +21,12 @@ async def lifespan(app: FastAPI):
     Initializes standard infrastructure connections to be injected at the API layer.
     """
     logger.info("Initializing Vector Engine (loading model)...")
-    app.state.vector_engine = VectorEngine()
+    vector_engine = VectorEngine()
+    await vector_engine.probe_dimension()
+    app.state.vector_engine = vector_engine
 
     logger.info("Connecting to Redis Cache Engine...")
-    app.state.cache_repo = CacheRepository(REDIS_URL)
+    app.state.cache_repo = CacheRepository(REDIS_URL, vector_dim=vector_engine.dimension_size)
     await app.state.cache_repo.connect()
 
     logger.info("Connecting to Kafka Topic Producer...")
