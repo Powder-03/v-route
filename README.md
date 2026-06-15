@@ -28,7 +28,7 @@ graph TD
 
 1. **Client Request**: The client requests a generation endpoint by hitting `POST /generate`.
 2. **Reverse Proxy (Nginx)**: Nginx routes the request to the FastAPI app cluster.
-3. **Embedding Vectorization**: The FastAPI Gateway calls LiteLLM's embedding API (configurable via `EMBEDDING_MODEL`, e.g., `gemini/text-embedding-004`) to convert the prompt into a normalized (L2) float vector. To prevent hardcoding, the dimension is automatically probed on startup via a test request and the Redis index schema is updated dynamically.
+3. **Embedding Vectorization**: The FastAPI Gateway calls LiteLLM's embedding API (configurable via `EMBEDDING_MODEL`, e.g., `gemini/gemini-embedding-2`) to convert the prompt into a normalized (L2) float vector. To prevent hardcoding, the dimension is automatically probed on startup via a test request and the Redis index schema is updated dynamically.
 4. **Semantic Caching**:
    - The Gateway executes a K-Nearest Neighbors (KNN) vector search in **Redis Stack** using the Cosine distance metric.
    - If the similarity is `> 95%` (equivalent to a cosine distance of `< 0.05`), it instantly serves the cached response, setting `cache_hit: true`.
@@ -43,7 +43,7 @@ graph TD
 
 * **Reverse Proxy**: Nginx (configured with API proxy connection timeouts and security headers).
 * **API Framework**: FastAPI (Python 3.11-slim) using standard clean architecture.
-* **Vector Embeddings**: LiteLLM Embeddings (supports any API embedding model like `gemini/text-embedding-004` or `openai/text-embedding-3-small`, with dynamically probed output dimensions at startup).
+* **Vector Embeddings**: LiteLLM Embeddings (supports any API embedding model like `gemini/gemini-embedding-2` or `openai/text-embedding-3-small`, with dynamically probed output dimensions at startup).
 * **Vector Cache**: Redis Stack Server (dynamically configured dimension sizes based on the probed embedding model, using HASH indices with Flat Index Vector Search + Cosine similarity).
 * **LLM Routing Factory**: LiteLLM (supports model-agnostic completions to OpenAI, Gemini, Anthropic, etc.).
 * **Streaming Engine**: Apache Kafka (KRaft mode).
@@ -107,7 +107,7 @@ v-route/
    POSTGRES_DB=telemetry
    
    # Model Configurations
-   EMBEDDING_MODEL=gemini/text-embedding-004
+   EMBEDDING_MODEL=gemini/gemini-embedding-2
    LLM_MODEL=gemini/gemini-1.5-flash
    
    # Provider API Keys
@@ -203,7 +203,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Set temporary environment flags
-set EMBEDDING_MODEL=gemini/text-embedding-004
+set EMBEDDING_MODEL=gemini/gemini-embedding-2
 set LLM_MODEL=gemini/gemini-1.5-flash
 set GEMINI_API_KEY=your_gemini_api_key_here
 set OPENAI_API_KEY=your_openai_api_key_here
