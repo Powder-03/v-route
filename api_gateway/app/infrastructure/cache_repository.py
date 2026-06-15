@@ -47,22 +47,17 @@ class CacheRepository:
         Executes a hybrid search: full-text match on 'prompt' combined with KNN vector search.
         Returns the top 5 candidates containing prompt, response, and vector_score.
         """
-        import re
-        # Clean text to alphanumeric words to avoid parser syntax errors
-        words = re.findall(r'\w+', query_text)
-        text_query = " | ".join(words) if words else "*"
-
         query_vector_bytes = query_embedding.tobytes()
 
-        # Build Hybrid search: text match + KNN 5 vector search
-        q = Query("(@prompt:$text_query)=>[KNN 5 @embedding $vec AS vector_score]")\
+        # Build pure KNN vector search
+        q = Query("(*)=>[KNN 5 @embedding $vec AS vector_score]")\
             .return_fields("prompt", "response", "vector_score")\
             .sort_by("vector_score")\
             .dialect(2)
 
         results = await self.client.ft(self.index_name).search(
             q, 
-            query_params={"text_query": text_query, "vec": query_vector_bytes}
+            query_params={"vec": query_vector_bytes}
         )
 
         candidates = []

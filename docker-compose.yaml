@@ -21,6 +21,7 @@ services:
       # Only docker-network-specific values here; everything else comes from .env
       - REDIS_URL=redis://redis_cache:6379/0
       - KAFKA_BROKER=kafka_broker:9092
+      - DB_URL=postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-secretpassword}@postgres_db:5432/${POSTGRES_DB:-telemetry}
     networks:
       - optiprompt-net
     depends_on:
@@ -28,6 +29,9 @@ services:
         condition: service_healthy
       kafka_broker:
         condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+
 
   redis_cache:
     image: redis/redis-stack-server:latest

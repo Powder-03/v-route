@@ -3,7 +3,10 @@ uvicorn[standard]==0.29.0
 pydantic==2.7.1
 redis==5.0.4
 aiokafka==0.10.0
-litellm[google]
+litellm
+google-generativeai
+
 numpy==1.26.4
 gunicorn==22.0.0
 flashrank==0.2.8
+asyncpg==0.29.0

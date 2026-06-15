@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 # Fetch environment variables
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis_cache:6379")
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka_broker:9092")
+DB_URL = os.getenv("DB_URL", "postgres://admin:secretpassword@localhost:5432/telemetry")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,6 +34,10 @@ async def lifespan(app: FastAPI):
     app.state.event_broker = EventBroker(KAFKA_BROKER)
     await app.state.event_broker.connect()
 
+    logger.info("Connecting to PostgreSQL Database...")
+    import asyncpg
+    app.state.db_pool = await asyncpg.create_pool(DB_URL)
+
     logger.info("Gateway fully started successfully.")
     
     yield
@@ -41,6 +46,8 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down infrastructure connections...")
     await app.state.cache_repo.close()
     await app.state.event_broker.close()
+    if hasattr(app.state, "db_pool") and app.state.db_pool:
+        await app.state.db_pool.close()
 
 
 app = FastAPI(title="v-route API Gateway", lifespan=lifespan)

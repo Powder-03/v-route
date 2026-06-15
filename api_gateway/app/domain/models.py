@@ -17,3 +17,13 @@ class TelemetryData:
     response_tokens: int
     latency_ms: int
     cache_hit: bool
+
+@dataclass
+class UsageSummary:
+    user_id: str
+    total_requests: int
+    prompt_tokens: int
+    response_tokens: int
+    total_tokens: int
+    avg_latency_ms: float
+

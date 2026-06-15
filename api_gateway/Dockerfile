@@ -24,11 +24,11 @@ RUN chown -R appuser:appgroup /app
 # Switch to the non-root user
 USER appuser
 
-# Pre-download and cache FlashRank model during build phase to prevent cold-start latency
-RUN python -c "from flashrank import Ranker; Ranker(model_name='ms-marco-TinyBERT-L-2-v2', cache_dir='/app/.flashrank_cache')"
 
 # Explicitly expose port
 EXPOSE 8000
 
 # Start Gunicorn wrapped around Uvicorn bound securely without localhost constraints
-CMD ["gunicorn", "main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "4"]
+# The model is explicitly downloaded sequentially before Gunicorn forks its 4 concurrent workers to prevent a race condition.
+CMD ["/bin/sh", "-c", "python -c \"from flashrank import Ranker; Ranker(model_name='ms-marco-TinyBERT-L-2-v2', cache_dir='/app/.flashrank_cache')\" && gunicorn main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 4"]
+
