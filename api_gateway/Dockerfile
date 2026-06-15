@@ -24,6 +24,9 @@ RUN chown -R appuser:appgroup /app
 # Switch to the non-root user
 USER appuser
 
+# Pre-download and cache FlashRank model during build phase to prevent cold-start latency
+RUN python -c "from flashrank import Ranker; Ranker(model_name='ms-marco-TinyBERT-L-2-v2', cache_dir='/app/.flashrank_cache')"
+
 # Explicitly expose port
 EXPOSE 8000
 

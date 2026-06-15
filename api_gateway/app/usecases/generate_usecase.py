@@ -2,10 +2,23 @@ import os
 import time
 import asyncio
 from litellm import acompletion
+from flashrank import Ranker, RerankRequest as FlashRankRerankRequest
 from app.domain.models import PromptEntity, ResponseEntity, TelemetryData
 from app.infrastructure.vector_engine import VectorEngine
 from app.infrastructure.cache_repository import CacheRepository
 from app.infrastructure.event_broker import EventBroker
+
+class RerankRequest(FlashRankRerankRequest):
+    """
+    Custom subclass of FlashRank's RerankRequest to explicitly support 
+    max_no_of_results in a python-safe manner.
+    """
+    def __init__(self, query=None, passages=None, max_no_of_results=None):
+        super().__init__(query=query, passages=passages)
+        self.max_no_of_results = max_no_of_results
+
+# Initialize the FlashRank Ranker once at the module level to avoid initialization overhead
+ranker = Ranker(model_name="ms-marco-TinyBERT-L-2-v2", cache_dir="/app/.flashrank_cache")
 
 class GenerateUseCase:
     """
@@ -29,18 +42,42 @@ class GenerateUseCase:
         # 1. Vectorize the prompt.
         embedding = await self.vector_engine.encode(entity.prompt)
         
-        # 2. Perform Cosine Similarity search in Redis cache engine
-        cached_response = await self.cache_repo.search_similar(embedding, threshold=0.95)
+        # 2. Perform Hybrid Search in Redis cache engine (returns top 5 candidates)
+        candidates = await self.cache_repo.search_similar(entity.prompt, embedding)
         
         prompt_tokens = len(entity.prompt.split())
         response_tokens = 0
+        cache_hit = False
+        response_text = ""
 
-        if cached_response:
-            cache_hit = True
-            response_text = cached_response
-            response_tokens = len(response_text.split())
-        else:
-            cache_hit = False
+        if candidates:
+            # Format passages for FlashRank reranking
+            passages = [
+                {
+                    "id": str(i),
+                    "text": candidate["prompt"],
+                    "response": candidate["response"],
+                    "vector_score": candidate["vector_score"]
+                }
+                for i, candidate in enumerate(candidates)
+            ]
+            
+            # Execute rerank request
+            rerank_request = RerankRequest(query=entity.prompt, passages=passages, max_no_of_results=1)
+            reranked_results = ranker.rerank(rerank_request)
+            
+            # Evaluate the top result
+            if reranked_results:
+                top_result = reranked_results[0]
+                top_score = top_result.get("score", 0.0)
+                
+                # Check cross-encoder relevance threshold of 0.88
+                if top_score >= 0.88:
+                    cache_hit = True
+                    response_text = top_result["response"]
+                    response_tokens = len(response_text.split())
+
+        if not cache_hit:
             # 3. Call LLM Generator via LiteLLM
             api_key = VectorEngine.get_api_key(self.llm_model)
             response = await acompletion(

@@ -6,3 +6,4 @@ aiokafka==0.10.0
 litellm==1.40.0
 numpy==1.26.4
 gunicorn==22.0.0
+flashrank==0.2.8
