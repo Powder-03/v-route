@@ -15,14 +15,12 @@ services:
     build: ./api_gateway
     # ports:
     #   - "8001:8000" # Removed for production security
+    env_file:
+      - .env
     environment:
+      # Only docker-network-specific values here; everything else comes from .env
       - REDIS_URL=redis://redis_cache:6379/0
       - KAFKA_BROKER=kafka_broker:9092
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-gemini/text-embedding-004}
-      - LLM_MODEL=${LLM_MODEL:-gemini/gemini-1.5-flash}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     networks:
       - optiprompt-net
     depends_on:
@@ -32,7 +30,7 @@ services:
         condition: service_healthy
 
   redis_cache:
-    image: redis/redis-stack-server:latest 
+    image: redis/redis-stack-server:latest
     # ports:
     #   - "6379:6379"
     volumes:
@@ -46,34 +44,37 @@ services:
       retries: 5
 
   kafka_broker:
-    image: apache/kafka:latest
+    image: confluentinc/confluent-local:7.6.1
+    hostname: kafka_broker
     environment:
-      # Official Apache Kafka KRaft Variables
-      - KAFKA_NODE_ID=1
-      - KAFKA_PROCESS_ROLES=broker,controller
-      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka_broker:9092
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka_broker:9093
-      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
-      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
-      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka_broker:9092'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka_broker:9093'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
     # ports:
     #   - "9092:9092"
     volumes:
-      - kafka_data:/tmp/kafka-logs
+      - kafka_data:/var/lib/kafka/data
     networks:
       - optiprompt-net
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
-      interval: 15s
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      start_period: 30s
+      interval: 10s
       timeout: 10s
       retries: 5
 
   postgres_db:
     image: postgres:15
+    env_file:
+      - .env
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-admin}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secretpassword}
@@ -93,6 +94,8 @@ services:
 
   golang_worker:
     build: ./go_worker
+    env_file:
+      - .env
     environment:
       - KAFKA_BROKER=kafka_broker:9092
       - DB_URL=postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-secretpassword}@postgres_db:5432/${POSTGRES_DB:-telemetry}

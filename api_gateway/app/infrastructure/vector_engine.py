@@ -23,7 +23,8 @@ class VectorEngine:
         """
         try:
             logger.info(f"Probing embedding model '{self.model_name}' to check dimension size...")
-            response = await aembedding(model=self.model_name, input=["warmup"])
+            api_key = self.get_api_key(self.model_name)
+            response = await aembedding(model=self.model_name, input=["warmup"], api_key=api_key)
             embedding_values = response["data"][0]["embedding"]
             self.dimension_size = len(embedding_values)
             logger.info(f"Successfully determined dimension size: {self.dimension_size}")
@@ -41,7 +42,8 @@ class VectorEngine:
 
     async def encode(self, text: str) -> np.ndarray:
         # Generate embedding via LiteLLM API
-        response = await aembedding(model=self.model_name, input=[text])
+        api_key = self.get_api_key(self.model_name)
+        response = await aembedding(model=self.model_name, input=[text], api_key=api_key)
         embedding = np.array(response["data"][0]["embedding"], dtype=np.float32)
         
         # L2 Normalization ensures that inner product matches pure cosine similarity.
@@ -50,3 +52,28 @@ class VectorEngine:
             embedding = embedding / norm
             
         return embedding
+
+    @staticmethod
+    def get_api_key(model_name: str) -> str:
+        """
+        Helper method to extract provider from model prefix and resolve
+        the correct environment variable, keeping the configuration model-agnostic.
+        """
+        if not model_name or "/" not in model_name:
+            return None
+        provider = model_name.split("/")[0].lower()
+        provider_keys = {
+            "gemini": "GEMINI_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "cohere": "COHERE_API_KEY",
+            "groq": "GROQ_API_KEY",
+            "mistral": "MISTRAL_API_KEY",
+            "replicate": "REPLICATE_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
+            "vertex_ai": "VERTEX_AI_API_KEY",
+        }
+        env_var = provider_keys.get(provider)
+        if env_var:
+            return os.getenv(env_var)
+        return None

@@ -42,9 +42,11 @@ class GenerateUseCase:
         else:
             cache_hit = False
             # 3. Call LLM Generator via LiteLLM
+            api_key = VectorEngine.get_api_key(self.llm_model)
             response = await acompletion(
                 model=self.llm_model,
-                messages=[{"role": "user", "content": entity.prompt}]
+                messages=[{"role": "user", "content": entity.prompt}],
+                api_key=api_key
             )
             response_text = response.choices[0].message.content or ""
             
